@@ -12,7 +12,11 @@ dirSubsystem = fullfile(dirType, sprintf('result_subsystem_%d_%d', window_width,
 dirFig = fullfile(dirType, sprintf('figures_%d_%d', window_width, window_overlap));
 mkdir(dirFig);
 
+dirData = fullfile(dirType, sprintf('data_%d_%d', window_width, window_overlap));
+mkdir(dirData);
+
 % list system-connectoin
+% list_system = {'all', 'within', 'between'};
 list_system = {'all'};
 nSystem = numel(list_system);
 
@@ -30,8 +34,8 @@ load(ROI_filename);
 
 % sample
 samplefile = fullfile('NEURON-D-14-01017_data','Fig3A_CPP_thresh.nii.gz');
-sampleimg = load_nii(samplefile);
-voxel2MNI = [sampleimg.hdr.hist.srow_x;sampleimg.hdr.hist.srow_y;sampleimg.hdr.hist.srow_z;[0,0,0,1]];
+V = spm_vol(samplefile);
+voxel2MNI = V.mat;
 MNI2voxel = inv(voxel2MNI);
 
 % merge MNI coordinate
@@ -91,9 +95,8 @@ for t = 1:nType
     
     typename = list_NEURON{t};
     filename = fullfile('NEURON-D-14-01017_data',sprintf('%s.nii.gz', typename));
-    cope = load_nii(filename);
-    data = cope.img;
-    data = mean(data,4);
+    V = spm_vol(filename);
+    data = spm_read_vols(V);
     
     val_fmri = NaN(nROI,1);
     val_subgraph.all = NaN(nROI,1);
@@ -138,6 +141,14 @@ for c = 1:nSystem
         
         x = allData.(typename).connectivity.(systemname);
         y = allData.(typename).activation;
+        
+        
+        % output rawdata
+        outputfile = sprintf('corr_connectivity_activation_%s_subgraph%.2d_%s.txt', systemname, s, typename);
+        outputfile = fullfile(dirData, outputfile);
+        dlmwrite(outputfile, [x,y], '\t');
+        
+        %     [rho,pval] = corr(x,y);
         [rho, p] = permutation_corr(x,y,nPerm);
         xval = linspace(min(x),max(x),100)';
         [param, yhat, ci] = polypredci(x, y, 1, 0.95, xval);
@@ -174,30 +185,57 @@ for c = 1:nSystem
         
         switch typename
             case {'Fig3A_CPP_unthresh'}
+                %             title(sprintf('Overlap between CPP and subgraph %d',s), 'fontsize',24);
+                %                 title(sprintf('CPP: Activation vs Connection'), 'fontsize',28.57);
                 title(sprintf('CPP'), 'fontsize',28.57);
                 xrange = [-0.1,1.1];
+                %             yrange = [-0.1,1.1];
                 yrange = ylim;
                 xlim(xrange);
                 ylim(yrange);
-                xpos = xrange(1)+(xrange(2)-xrange(1))*0.75;
-                ypos = yrange(1)+(yrange(2)-yrange(1))*0.15;
+                switch data_type
+                    case {'result_raw'}
+                        xpos = xrange(1)+(xrange(2)-xrange(1))*0.75;
+                        ypos = yrange(1)+(yrange(2)-yrange(1))*0.15;
+                    case {'result_residual'}
+                        xpos = xrange(1)+(xrange(2)-xrange(1))*0.05;
+                        ypos = yrange(1)+(yrange(2)-yrange(1))*0.9;
+                end
             case {'Fig3B_RU_unthresh'}
+                %             title(sprintf('Overlap between RU and subgraph %d',s), 'fontsize',24);
+                %                 title(sprintf('RU: Activation vs Connection'), 'fontsize',28.57);
                 title(sprintf('RU'), 'fontsize',28.57);
                 xrange = [-0.1,1.1];
+                %             yrange = [-0.1,1.1];
                 yrange = ylim;
                 xlim(xrange);
                 ylim(yrange);
-                xpos = xrange(1)+(xrange(2)-xrange(1))*0.75;
-                ypos = yrange(1)+(yrange(2)-yrange(1))*0.15;
+                switch data_type
+                    case {'result_raw'}
+                        xpos = xrange(1)+(xrange(2)-xrange(1))*0.75;
+                        ypos = yrange(1)+(yrange(2)-yrange(1))*0.15;
+                    case {'result_residual'}
+                        xpos = xrange(1)+(xrange(2)-xrange(1))*0.05;
+                        ypos = yrange(1)+(yrange(2)-yrange(1))*0.9;
+                end
             case {'Fig3C_Rwd_unthresh'}
+                %             title(sprintf('Overlap between Reward and subgraph %d',s), 'fontsize',24);
+                %                 title(sprintf('Reward: Activation vs Connection'), 'fontsize',28.57);
                 title(sprintf('Reward'), 'fontsize',28.57);
                 xrange = [-0.1,1.1];
                 %             yrange = [-0.1,1.1];
                 yrange = ylim;
                 xlim(xrange);
                 ylim(yrange);
-                xpos = xrange(1)+(xrange(2)-xrange(1))*0.05;
-                ypos = yrange(1)+(yrange(2)-yrange(1))*0.9;
+                switch data_type
+                    case {'result_raw'}
+                        xpos = xrange(1)+(xrange(2)-xrange(1))*0.05;
+                        ypos = yrange(1)+(yrange(2)-yrange(1))*0.9;
+                    case {'result_residual'}
+                        xpos = xrange(1)+(xrange(2)-xrange(1))*0.05;
+                        ypos = yrange(1)+(yrange(2)-yrange(1))*0.9;
+                end
+                
         end
         
         set(gca, 'XTick', [0:0.2:1]);
@@ -211,9 +249,10 @@ for c = 1:nSystem
         end
         
         text(xpos,ypos,sprintf('r=%.3f\n%s', rho, text_p), 'fontsize',28.57);
+        %                 text(xpos,ypos,sprintf('b=%.3f\np=%.3f\nb_{rms}=%.3f\np_{rms}=%.3f', beta(2), stats.p(2),beta(3), stats.p(3)), 'fontsize',16);
         
         outputfile = fullfile(dirFig, sprintf('overlap_NEURON_%s_subgraph%d_%s', systemname, s, typename));
-        print(outputfile,'-depsc','-opengl');
+        print(outputfile,'-depsc','-painters');
         
     end
 end

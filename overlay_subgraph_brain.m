@@ -7,10 +7,13 @@ window_overlap = 8;
 dim = [61, 73, 61]; % 3mm X 3mm X 3mm
 
 nSubgraph = 10;
-threshold_z = 2.3;
+
+% method of ROI
+ROI_radius = 100; % mm
 
 % directory
 dirType = 'result_24mc_CSF_WM/result_raw';
+% dirType = 'result_24mc_CSF_WM/result_residual';
 dirSubsystem = fullfile(dirType, sprintf('result_subsystem_%d_%d', window_width, window_overlap));
 
 % ROI list
@@ -19,13 +22,13 @@ load(ROI_filename);
 
 % mask
 maskfile = 'MNI152_T1_3mm_brain_mask.nii.gz';
-maskimg = load_nii(maskfile);
-matrix_mask = maskimg.img;
+V = spm_vol(maskfile);
+matrix_mask = spm_read_vols(V);
 
 % sample
 samplefile = fullfile('NEURON-D-14-01017_data','Fig3A_CPP_thresh.nii.gz');
-sampleimg = load_nii(samplefile);
-voxel2MNI = [sampleimg.hdr.hist.srow_x;sampleimg.hdr.hist.srow_y;sampleimg.hdr.hist.srow_z;[0,0,0,1]];
+V = spm_vol(samplefile);
+voxel2MNI = V.mat;
 MNI2voxel = inv(voxel2MNI);
 
 % merge MNI coordinate
@@ -53,7 +56,11 @@ for i = 1:dim(1)
                 current_MNI = repmat(current_MNI,nValid,1);
                 distance_node = sqrt(sum((MNI_all-current_MNI).^2,2));
                 [val,idx] = min(distance_node);
-                brain_node(i,j,k) = idx(1);
+                
+                if val<=ROI_radius
+                    idx_ROI = idx(1);
+                    brain_node(i,j,k) = idx_ROI;
+                end
                 
             end
             
@@ -86,11 +93,13 @@ for s = 1:nSubgraph
         
     end
     
-    subgraph_img = sampleimg;
-    subgraph_img.img = matrix_val;
+    outputfile = fullfile(dirSubsystem,sprintf('node_strength_subgraph%.2d_pos.nii',s));
+    V.fname = outputfile;
+    V.private.dat.fname = V.fname;
+    spm_write_vol(V, matrix_val);
     
-    outputfile = fullfile(dirSubsystem,sprintf('node_strength_subgraph%.2d_pos.nii.gz',s));
-    save_nii(subgraph_img,outputfile);
+    gzip(outputfile);
+    delete(outputfile);
     
 end
 
@@ -124,11 +133,13 @@ for s = 1:nSubgraph
         
     end
     
-    subgraph_img = sampleimg;
-    subgraph_img.img = matrix_val;
+    outputfile = fullfile(dirSubsystem,sprintf('node_strength_subgraph%.2d_neg.nii',s));
+    V.fname = outputfile;
+    V.private.dat.fname = V.fname;
+    spm_write_vol(V, matrix_val);
     
-    outputfile = fullfile(dirSubsystem,sprintf('node_strength_subgraph%.2d_neg.nii.gz',s));
-    save_nii(subgraph_img,outputfile);
+    gzip(outputfile);
+    delete(outputfile);
     
 end
 
